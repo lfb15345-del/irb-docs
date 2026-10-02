@@ -16,18 +16,29 @@
 
 ## 入れ方
 
-### Claude Code
+**Claude のデスクトップアプリの「Code」で使ってください**（Pro 以上のプラン）。Code はあなたのパソコンの上で動くので、手元の Word をそのまま読み書きでき、PubMed にもつながります。
+
+1. デスクトップアプリで「Code」を開き、研究の書類を置くフォルダを選ぶ。
+2. 次の一文を送る。
+
+   > https://github.com/lfb15345-del/irb-docs のスキルを入れて
+
+   Claude がスキルを `~/.claude/skills/irb-docs` に置き、要るもの（python-docx など）を入れます。許可を求められたら「許可」を押してください。Python の無いパソコンでは、その入れ方も案内します。
+3. 新しい会話を始めると使えます。倫理審査の話をすると自動で読み込まれます。
+
+ターミナルで入れる場合:
 
 ```bash
-git clone <このリポジトリのURL> ~/.claude/skills/irb-docs
+git clone https://github.com/lfb15345-del/irb-docs ~/.claude/skills/irb-docs
 pip install python-docx scipy numpy pymupdf
 ```
 
-Windows では `%USERPROFILE%\.claude\skills\irb-docs` に置きます。Claude Code を開き直すと、倫理審査の話をしたときに自動で使われます。
+## 頼み方の例
 
-### Claude.ai（ウェブ・アプリ）
-
-このフォルダを zip にまとめて（またはリリースの `.skill` ファイルを）、Claude の設定の「スキル」から追加します。
+- 「北大病院の倫理審査。○○の後ろ向き研究の計画書の背景を書いて。文献は RIS で」
+- 「症例数の根拠を短く。年間○例、○年分」
+- 「この計画書（Word）を指針とひな形に照らして点検して」
+- 「共同研究者のコメントが付いた Word を直して、コメントに返信して」
 
 ## 使うときの準備
 

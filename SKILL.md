@@ -37,7 +37,7 @@ description: 倫理審査（IRB）の申請書類を作る・添削する・点�
 1. **ひな形・様式・承認済みの実例を集める。** 機関の公開ページから取り、`様式/` に置く。.doc は `scripts/docx_to_pdf.ps1 -ToDocx` で .docx にする（Windows・Word）。
 2. **ひな形を読む。** `python scripts/dump_template.py ひな形.docx --runs --out 構造.txt`。赤（注意）・青（例文）・黒（定型文）、見出しの文字と深さ、表、表紙の枠、先頭ページ別指定を確かめる。冒頭の「使用上の注意」と、各見出しの赤字の指示は必ず読み、消す前に手引きへ写す。
 3. **中身を決める。** 章ごとの書き方は `references/sections.md`。システムを使う研究は、**システムが実際に集める情報の一覧**を先に作り、それをもとに取得項目・個人情報・保管を書く。
-4. **背景と引用。** `references/citations.md` の手順で、主張を文に分け → 検索 → 抄録で確かめて文を合わせる（主張と逆の系統的レビューも探す）→ 対応表（文／番号／支える抄録の文／数値）を残す → `refs.json` を登場順に → `python scripts/fetch_refs.py build refs.json --out <研究のフォルダ>/references --title "<計画書名>" --clean`。**文献は記憶から書かず、必ずダウンロードした RIS から作る。**
+4. **背景と引用。** `references/citations.md` の手順で、主張を文に分け → 検索 → 抄録で確かめて文を合わせる（主張と逆の系統的レビューも探す）→ 対応表（文／番号／支える抄録の文／数値）を残す → `refs.json` を登場順に → `python scripts/fetch_refs.py build refs.json --out <研究のフォルダ>/references --title "<計画書名>" --clean`。**文献は記憶から書かず、必ずダウンロードした RIS から作る。** PubMed につながらなければ、書く人に .nbib を保存してもらって `--local` で渡す（citations.md）。
 5. **症例数の根拠。** `references/sample-size.md`。シンプルな設計は `python scripts/sample_size.py <設計> …` で数と文の下書きを出し、仮定の出どころ・脱落・実施可能性を添える。集まる数が先に決まっている研究（後ろ向きなど）は、効果の大きさを省いて `--n` を入れ、その数で検出できる差を出す。1人を繰り返し測る設計のときだけ `power_sim.py`。
 6. **転記スクリプトを書く。** `scripts/docx_tools.py` を import する（冒頭に使い方）。流れは `protect`（表紙を守る）→ `cut_before`（使用上の注意ページ）→ `purge_guidance` → `purge_examples` → `purge_tables` → `Inserter.after`（見出しの文字で位置を探す）→ `delete_between`（残ったひな形の空見出し）→ `finalize` → `safe_save`。本文では `{{1}}` `{{3,4}}` と書くと上付きの引用番号になる。
    - 注意書き・例文が段落ごと色分けされたひな形（北大 HT1/HT2）は `mode="paragraph"`。1行に黒字のラベルと色字の値が混ざるひな形（北大 HT3 など）は `mode="inline"`。`--runs` の出力で決める。
