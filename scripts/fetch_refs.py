@@ -128,21 +128,40 @@ def initials(given):
     return out
 
 
+SUFFIX_RX = re.compile(r"^(Jr|Sr|II|III|IV|V|VI|\d+(st|nd|rd|th))\.?$", re.I)
+
+
 def fmt_author(a):
-    """'Shaffer, F' / 'Maas, Cora J. M.' / 'Kivimäki, Mika' → 'Shaffer F'"""
+    """'Shaffer, F' / 'Maas, Cora J. M.' / 'Kivimäki, Mika' → 'Shaffer F'
+    'Bogardus, Sidney T, Jr' → 'Bogardus ST Jr'、'Brown, Charles H, 4th' → 'Brown CH 4th'（接尾辞を頭文字に混ぜない）"""
     if "," not in a:
         return a.strip()
-    last, given = [s.strip() for s in a.split(",", 1)]
+    parts = [x.strip() for x in a.split(",")]
+    last, rest = parts[0], [x for x in parts[1:] if x]
+    suffix = [x.rstrip(".") for x in rest if SUFFIX_RX.match(x)]
+    given = " ".join(x for x in rest if not SUFFIX_RX.match(x))
     ini = given.replace(" ", "") if re.fullmatch(r"[A-Z](\s?[A-Z])*", given) else initials(given)
-    return f"{last} {ini}".strip()
+    out = f"{last} {ini}".strip()
+    if suffix:
+        out += " " + " ".join(suffix)
+    return out
+
+
+SIMPLE_PAGES_RX = re.compile(r"[A-Za-z]?\d+(-[A-Za-z]?\d+)?")
+
+
+def complex_pages(pg):
+    """単純な「頁」「頁-頁」でない（330.e1-6、869-75.e1-2、318-30, 330.e1-6 など）。"""
+    pg = (pg or "").strip()
+    return bool(pg) and not SIMPLE_PAGES_RX.fullmatch(pg)
 
 
 def nlm_pages(pg):
     pg = (pg or "").strip()
     if not pg:
         return ""
-    if "," in pg:
-        return pg.replace("-", "–")
+    if complex_pages(pg):
+        return pg.replace("-", "–")      # 複合頁は PubMed の表記のまま（全桁に展開しない）
     m = re.fullmatch(r"([A-Za-z]?)(\d+)-([A-Za-z]?)(\d+)", pg)
     if m:
         pre, sp, _, ep = m.groups()
@@ -152,9 +171,11 @@ def nlm_pages(pg):
     return pg
 
 
-def format_ref(rec, doi, pages=None, abbr=None):
+def format_ref(rec, doi, pages=None, abbr=None, authors=None):
+    """authors: PubMed の esummary の著者名（'Westendorp RG'、'Bogardus ST Jr'）。あればそれを使う。
+    RIS の名（'Westendorp, Rudi G J'）から頭文字を作ると、PubMed の表記と食い違うことがある。"""
     title = (rec.get("T1") or rec.get("TI") or [""])[0].rstrip(".")
-    authors = [fmt_author(x) for x in rec.get("AU", []) + rec.get("A1", [])]
+    authors = list(authors or []) or [fmt_author(x) for x in rec.get("AU", []) + rec.get("A1", [])]
     if not authors and ". Task Force of" in title:        # PubMed は団体著者を表題の後ろに置く
         title, corp = title.split(". Task Force of", 1)
         authors = ["Task Force of" + corp]
@@ -193,7 +214,7 @@ def cmd_build(a):
     meta, combined = [], []
     for no, it in enumerate(items, 1):
         key = f"{no:02d}_{it['key']}"
-        fixes, pages, doi = [], None, it.get("doi")
+        fixes, pages, doi, names = [], None, it.get("doi"), None
         if it.get("manual_ris"):
             ris, src = norm_newlines(it["manual_ris"]), "manual"
             fixes.append("RIS が取得できないため手作り")
@@ -202,8 +223,9 @@ def cmd_build(a):
             d = summ[it["pmid"]]
             doi = doi or doi_of(d)
             pages = nlm_pages(d.get("pages")) or None
-            if "," in (d.get("pages") or ""):
-                # Citation Exporter は複合頁の終頁を壊す（330.e1-6 → 330.e3306）ので PubMed 本体の表記に置換
+            names = [x["name"] for x in d.get("authors", []) if x.get("name")]
+            if complex_pages(d.get("pages")):
+                # Citation Exporter は複合頁の終頁を壊す（330.e1-6 → 330.e3306、869-75.e1-2 → 75.e752）ので PubMed 本体の表記に置換
                 ris = re.sub(r"\nSP  - [^\n]*", lambda _: "\nSP  - " + d["pages"], ris, count=1)
                 ris = re.sub(r"\nEP  - [^\n]*", "", ris, count=1)
                 fixes.append(f"頁欄を PubMed 本体の表記（{d['pages']}）に置換")
@@ -225,7 +247,7 @@ def cmd_build(a):
             fixes.append("DOI を追加")
         write_ris(out / f"{key}.ris", ris)
         combined.append(ris.strip())
-        ref = format_ref(rec, doi, pages, it.get("abbr"))
+        ref = format_ref(rec, doi, pages, it.get("abbr"), names)
         meta.append({"no": no, "file": f"{key}.ris", "pmid": it.get("pmid"), "doi": doi, "source": src,
                      "cited_at": it.get("cited_at", ""), "ris_fixes": fixes, "reference": ref})
         print(f"{no:>2}. {ref}")
