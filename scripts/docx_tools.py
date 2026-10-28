@@ -334,6 +334,22 @@ def apply_inline(p, choice_words=(), slot=SLOT, recolor_only=False):
 
 
 # ------------------------------------------------------------------ 削除
+# keep_ids は段落の要素の id() の集合。lxml の要素の代理オブジェクトは参照が切れると捨てられ、
+# 同じ id() が別の段落に使い回される（守ったはずの段落が消え、消すはずの段落が残る。2026-10-28）。
+# 守る要素はここで参照を持ち続ける。
+_ALIVE = []
+
+
+def keep_ids(paragraphs):
+    """段落（Paragraph）の並びから、purge_* に渡す keep_ids を作る（参照を持ち続ける）。"""
+    out = set()
+    for p in paragraphs:
+        el = p._p if hasattr(p, "_p") else p
+        _ALIVE.append(el)
+        out.add(id(el))
+    return out
+
+
 def protect(doc, items):
     """[(正規表現, 新しい文字, 文字サイズ)] を書き換え、その段落を以後の削除から守る。"""
     keep = set()
@@ -344,6 +360,7 @@ def protect(doc, items):
         for r in p.runs:
             clear_marks(r)
         clear_mark_color(p)
+        _ALIVE.append(p._p)
         keep.add(id(p._p))
     return keep
 
