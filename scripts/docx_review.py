@@ -388,8 +388,19 @@ def ppr_mark(p, tag, ids, author, date):
         p.insert(0, ppr)
     rpr = ppr.find(w("rPr"))
     if rpr is None:
-        rpr = etree.SubElement(ppr, w("rPr"))
-    rpr.append(mark(tag, ids, author, date))
+        # pPr の中で rPr は sectPr・pPrChange より前（スキーマの順序）
+        rpr = el("rPr")
+        tail = next((c for c in ppr if c.tag in (w("sectPr"), w("pPrChange"))), None)
+        if tail is not None:
+            tail.addprevious(rpr)
+        else:
+            ppr.append(rpr)
+    # 段落記号の ins/del は rPr の先頭（書式の要素より前）。他人の ins/del が既にあればその後ろ
+    marks = [c for c in rpr if c.tag in (w("ins"), w("del"), w("moveFrom"), w("moveTo"))]
+    if marks:
+        marks[-1].addnext(mark(tag, ids, author, date))
+    else:
+        rpr.insert(0, mark(tag, ids, author, date))
 
 
 def tracked_insert_paras(p, text, style_from, ids, author, date):
