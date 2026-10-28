@@ -32,6 +32,7 @@ plan.json の形（どれも省略できる）:
 }
 - para / insert_after / delete_paragraph は段落の文字に対する正規表現（表のセルの段落も探す）。1つに決まらないと止まる（"all": true で全部）。
 - find は段落の中の文字そのまま（正規表現にしたいときは "regex": true）。段落の中で1か所に決まらないと止まる。
+- text / replace / insert の中の {{1}} {{1–3}} {{8,9}} は上付きの引用番号になる（EndNote を使わずに済む）。
 - 直しは段落の中だけ（段落をまたぐ置き換えはしない）。複雑な段落（既存の変更履歴の中、タブ・改行をまたぐ）は止まるので、手で直すか段落ごと差し替える。
 """
 import argparse
@@ -308,6 +309,9 @@ def to_deleted(r):
     for t in r.findall(w("t")):
         t.tag = w("delText")
         t.set(f"{{{XML}}}space", "preserve")
+    # EndNote 等のフィールドコードは削除側では delInstrText にしないと Word が壊れたファイルとみなす
+    for t in r.findall(w("instrText")):
+        t.tag = w("delInstrText")
 
 
 def new_run(text, rpr=None):
@@ -320,6 +324,38 @@ def new_run(text, rpr=None):
     return r
 
 
+# rPr の中で vertAlign より後ろに来る要素（スキーマの順序。Word は順序違いを壊れたファイルとみなすことがある）
+_AFTER_VERTALIGN = ("rtl", "cs", "em", "lang", "eastAsianLayout", "specVanish", "oMath")
+
+
+def _superscript(r):
+    rpr = r.find(w("rPr"))
+    if rpr is None:
+        rpr = el("rPr")
+        r.insert(0, rpr)
+    for old in rpr.findall(w("vertAlign")):
+        rpr.remove(old)
+    va = el("vertAlign", val="superscript")
+    nxt = next((c for c in rpr if c.tag in [w(t) for t in _AFTER_VERTALIGN]), None)
+    if nxt is not None:
+        nxt.addprevious(va)
+    else:
+        rpr.append(va)
+
+
+def new_runs(text, rpr=None):
+    """文字をランに分ける。{{1}} {{1–3}} {{8,9}} は上付きの引用番号にする（docx_tools と同じ書き方）。"""
+    out = []
+    for k, part in enumerate(re.split(r"\{\{([^{}]+)\}\}", text)):
+        if not part:
+            continue
+        r = new_run(part, rpr)
+        if k % 2:
+            _superscript(r)
+        out.append(r)
+    return out or [new_run("", rpr)]
+
+
 def tracked_replace(p, find, replace, insert, regex, ids, author, date):
     """段落の中の find を、変更履歴つきで replace に置き換える（insert なら後ろに足す）。
     返り値は (先頭の要素, 末尾の要素)＝コメントを付ける範囲。"""
@@ -328,7 +364,7 @@ def tracked_replace(p, find, replace, insert, regex, ids, author, date):
     rpr = rs[0].find(w("rPr")) if rs else None
     if insert is not None:
         ins = mark("ins", ids, author, date)
-        ins.append(new_run(insert, rpr))
+        ins.extend(new_runs(insert, rpr))
         rs[-1].addnext(ins)
         return ins, ins
     d = mark("del", ids, author, date)
@@ -339,7 +375,7 @@ def tracked_replace(p, find, replace, insert, regex, ids, author, date):
     last = d
     if replace:
         ins = mark("ins", ids, author, date)
-        ins.append(new_run(replace, rpr))
+        ins.extend(new_runs(replace, rpr))
         d.addnext(ins)
         last = ins
     return d, last
@@ -375,7 +411,7 @@ def tracked_insert_paras(p, text, style_from, ids, author, date):
             np_.append(pp)
         ppr_mark(np_, "ins", ids, author, date)
         ins = mark("ins", ids, author, date)
-        ins.append(new_run(line, base_rpr))
+        ins.extend(new_runs(line, base_rpr))
         np_.append(ins)
         anchor.addnext(np_)
         anchor = np_
